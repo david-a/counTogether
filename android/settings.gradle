@@ -1,0 +1,3 @@
+rootProject.name = 'counTogether'
+
+include ':app'
