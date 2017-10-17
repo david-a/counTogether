@@ -27,7 +27,10 @@ export default class App extends React.Component {
         contentContainerStyle={styles.container}
       >
         <View style={styles.bigNumberContainer}>
-          <Text style={styles.bigNumber}>{this.calculateAmounts()}</Text>
+          <Text
+            adjustsFontSizeToFit
+            numberOfLines={1}
+            style={styles.bigNumber}>{this.calculateAmounts()}</Text>
         </View>
         <View style={styles.buttonsContainer}>
           <TextInput
@@ -64,7 +67,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   bigNumber: {
-    fontSize: 100
+    textAlign: 'center',
+    fontSize: 150,
+    height: 150,
+    width: '90%'
   },
   buttonsContainer: {
     flex: 1,
