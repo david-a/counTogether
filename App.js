@@ -8,10 +8,9 @@ export default class App extends React.Component {
   constructor(props) {
     super(props);
     this.initialState = {
-      amounts: [],
+      amounts: {},
       bucket: null,
       password: null,
-      dataRef: null,
       storageLoading: true
     };
     this.state = this.initialState;
@@ -20,6 +19,7 @@ export default class App extends React.Component {
     this.fetchBucket = this.fetchBucket.bind(this);
     this.onBucketChange = this.onBucketChange.bind(this);
     this.onPasswordChange = this.onPasswordChange.bind(this);
+    this.calculateAmounts = this.calculateAmounts.bind(this);
   }
 
   componentWillMount () {
@@ -32,20 +32,33 @@ export default class App extends React.Component {
       const dataFromStorage = await AsyncStorage.getItem(bucketStorageKey);
       if (dataFromStorage){
         // We have data!!
-        var { bucket, password, amounts } = JSON.parse(dataFromStorage);
+        var { bucket, password, amounts = {}} = JSON.parse(dataFromStorage);
+        console.log("got From Storage", bucket);
         this.setState({
-          amounts,
+          amounts: amounts,
           bucket,
           password,
           storageLoading: false
         })
-        const dataRef = firebase.database().ref('buckets/' + this.state.bucket + '/secrets/' + this.state.password + '/amounts');
-        dataRef.once('value').then((snapshot) => {
-          console.log(snapshot.val());
+        this._dataRef = firebase.database().ref(this.dataRefKey(this.state.bucket, this.state.password));
+        this._dataRef.once('value').then((snapshot) => {
+          console.log("Received value From Firebase:", snapshot.val());
           this.setState({
             amounts: snapshot.val() || amounts,
-            dataRef
           })
+        });
+        this._dataRef.on('child_added', (data) => {
+          console.log("Received child_added From Firebase:", data);
+          this.setState(previousState => {
+            const amounts = { ...previousState.amounts, [data.key]: data.val() };
+            const dataForStore = {
+              amounts,
+              bucket,
+              password
+            }
+            AsyncStorage.setItem(bucketStorageKey, JSON.stringify(dataForStore));
+            return { amounts };
+          });
         });
       } else {
         this.setState({ storageLoading: false });
@@ -61,20 +74,25 @@ export default class App extends React.Component {
     this.setState({ ...this.initialState, storageLoading: false });
   }
 
+  dataRefKey (bucket, password) {
+    return 'buckets/' + bucket + '/secrets/' + password + '/amounts';
+  }
+
   calculateAmounts () {
-    return this.state.amounts.reduce((sum, value) => sum + value, 0)
+    return Object.keys(this.state.amounts).reduce((previous, key) => previous + this.state.amounts[key], 0);
   }
 
   addSome () {
     const newValue = this._input;
-    const undoKey = this.state.dataRef.push().key
+    console.log("NEW VALUE: " , newValue);
+    const undoKey = this._dataRef.push(newValue).key
     console.log("unddo", undoKey);
     this.setState(previousState => {
-      const amounts = previousState.amounts.concat([newValue]);
+      const amounts = { ...previousState.amounts, [undoKey]: newValue };
       const dataForStore = {
         amounts,
-        bucket: this._bucket,
-        password: this._password
+        bucket: this.state.bucket,
+        password: this.state.password
       }
       AsyncStorage.setItem(bucketStorageKey, JSON.stringify(dataForStore));
       return { amounts };
@@ -83,23 +101,34 @@ export default class App extends React.Component {
     this._inputElement.setNativeProps({text: ''});
   }
 
-  async fetchBucket () {
+  fetchBucket () {
     if (this.state.bucketIsValid && this.state.passwordIsValid) {
+      const bucket = this._bucket;
+      const password = this._password;
       try {
-        const dataForStore = {
-          bucket: this._bucket,
-          password: this._password
-        }
-        await AsyncStorage.setItem(bucketStorageKey, JSON.stringify(dataForStore));
-        console.log(this._bucket);
-        const dataRef = firebase.database().ref('buckets/' + this._bucket + '/secrets/' + this._password + '/amounts')
-        dataRef.once('value').then((snapshot) => {
-          this.setState({
+        this._dataRef = firebase.database().ref(this.dataRefKey(this._bucket, this._password));
+        this._dataRef.once('value').then((snapshot) => {
+          console.log("LOADED ONCE");
+          const dataForStore = {
             amounts: snapshot.val() || [],
-            bucket: this._bucket,
-            password: this._password,
-            dataRef
-          })
+            bucket,
+            password,
+          }
+          this.setState(dataForStore)
+          AsyncStorage.setItem(bucketStorageKey, JSON.stringify(dataForStore));
+        });
+        this._dataRef.on('child_added', (data) => {
+          console.log("Received child_added From Firebase:", data);
+          this.setState(previousState => {
+            const amounts = { ...previousState.amounts, [data.key]: data.val() };
+            const dataForStore = {
+              amounts,
+              bucket,
+              password
+            }
+            AsyncStorage.setItem(bucketStorageKey, JSON.stringify(dataForStore));
+            return { amounts };
+          });
         });
       } catch (error) {
         console.log(error);
