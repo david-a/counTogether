@@ -162,14 +162,22 @@ export default class App extends React.Component {
           returnKeyType='next'
           onChangeText={(input) => this._bucket = input}
           placeholder='BUCKET NAME'
+          onSubmitEditing={(event) => {
+            this.refs.passwordInput.focus();
+          }}
         />
         <TextInput
           style={[styles.credsInput]}
           placeholderTextColor='#ddddee'
+          ref='passwordInput'
+          returnKeyType='go'
           autoCorrect={false}
           secureTextEntry
           onChangeText={(input) => this._password = input}
           placeholder='PASSWORD'
+          onSubmitEditing={(event) => {
+            this.fetchBucket();
+          }}
         />
         <Button
           onPress={this.fetchBucket}
@@ -287,6 +295,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     alignItems: 'stretch',
     justifyContent: 'center',
+    width: '100%'
   },
   centeredContainer: {
     flex: 1,
@@ -316,7 +325,7 @@ const styles = StyleSheet.create({
     width: '100%',
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
   },
   bucketName: {
     fontSize: 18,
@@ -324,7 +333,7 @@ const styles = StyleSheet.create({
   },
   bigNumber: {
     textAlign: 'center',
-    fontSize: 150
+    fontSize: 150,
   },
   addedChild: {
     marginTop: 20,
@@ -333,7 +342,7 @@ const styles = StyleSheet.create({
   },
   bigNumberContent: {
     height: 150,
-    width: '90%'
+    width: '100%'
   },
   buttonsContainer: {
     flex: 1,
