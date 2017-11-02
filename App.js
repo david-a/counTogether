@@ -13,18 +13,27 @@ export default class App extends React.Component {
       password: null,
       storageLoading: true
     };
+    this._input = 0;
     this.state = this.initialState;
     this.addSome = this.addSome.bind(this);
     this.logOut = this.logOut.bind(this);
     this.fetchBucket = this.fetchBucket.bind(this);
-    this.onBucketChange = this.onBucketChange.bind(this);
-    this.onPasswordChange = this.onPasswordChange.bind(this);
     this.calculateAmounts = this.calculateAmounts.bind(this);
+    this.updateAsyncStorage = this.updateAsyncStorage.bind(this);
+    this.dataRef = this.dataRef.bind(this);
+    this.listenToFirebase = this.listenToFirebase.bind(this);
   }
 
   componentWillMount () {
     firebase.initializeApp(firebaseConfig);
     this.getBucketDetailsFromStorage();
+  }
+
+  componentDidUpdate(prevProps, prevState) {
+    if (!prevState.bucket && this.state.bucket) {
+      console.log('connecting to firebase', this.state.bucket);
+      this.listenToFirebase();
+    }
   }
 
   async getBucketDetailsFromStorage () {
@@ -33,32 +42,12 @@ export default class App extends React.Component {
       if (dataFromStorage){
         // We have data!!
         var { bucket, password, amounts = {}} = JSON.parse(dataFromStorage);
-        console.log("got From Storage", bucket);
+        console.log("got From Storage", JSON.parse(dataFromStorage));
         this.setState({
           amounts: amounts,
           bucket,
           password,
           storageLoading: false
-        })
-        this._dataRef = firebase.database().ref(this.dataRefKey(this.state.bucket, this.state.password));
-        this._dataRef.once('value').then((snapshot) => {
-          console.log("Received value From Firebase:", snapshot.val());
-          this.setState({
-            amounts: snapshot.val() || amounts,
-          })
-        });
-        this._dataRef.on('child_added', (data) => {
-          console.log("Received child_added From Firebase:", data);
-          this.setState(previousState => {
-            const amounts = { ...previousState.amounts, [data.key]: data.val() };
-            const dataForStore = {
-              amounts,
-              bucket,
-              password
-            }
-            AsyncStorage.setItem(bucketStorageKey, JSON.stringify(dataForStore));
-            return { amounts };
-          });
         });
       } else {
         this.setState({ storageLoading: false });
@@ -71,11 +60,17 @@ export default class App extends React.Component {
 
   async logOut () {
     await AsyncStorage.removeItem(bucketStorageKey);
+    console.log('removed from storage!')
+    this._dataRef = null;
     this.setState({ ...this.initialState, storageLoading: false });
   }
 
-  dataRefKey (bucket, password) {
-    return 'buckets/' + bucket + '/secrets/' + password + '/amounts';
+  dataRef () {
+    if (this._dataRef) return this._dataRef;
+    if (!this.state.bucket) return;
+    const dataRefKey = 'buckets/' + this.state.bucket + '/secrets/' + this.state.password + '/amounts';
+    this._dataRef = firebase.database().ref(dataRefKey);
+    return this._dataRef;
   }
 
   calculateAmounts () {
@@ -83,77 +78,68 @@ export default class App extends React.Component {
   }
 
   addSome () {
+    if (!this.dataRef()) {
+      Alert.alert('Initiating bucket, please try again.')
+      return;
+    }
     const newValue = this._input;
     console.log("NEW VALUE: " , newValue);
-    const undoKey = this._dataRef.push(newValue).key
-    console.log("unddo", undoKey);
+    const undoKey = this.dataRef().push(newValue).key
+    console.log("undo key:", undoKey);
     this.setState(previousState => {
       const amounts = { ...previousState.amounts, [undoKey]: newValue };
-      const dataForStore = {
-        amounts,
-        bucket: this.state.bucket,
-        password: this.state.password
-      }
-      AsyncStorage.setItem(bucketStorageKey, JSON.stringify(dataForStore));
+      this.updateAsyncStorage(amounts);
       return { amounts };
     });
     this._input = 0;
     this._inputElement.setNativeProps({text: ''});
   }
 
+  listenToFirebase () {
+    if (this.dataRef()) {
+      console.log("listenToFirebase:", this.state);
+      this.dataRef().once('value').then((snapshot) => {
+        console.log("LOADED ONCE");
+        const amounts = snapshot.val();
+        this.setState({ amounts });
+        this.updateAsyncStorage(amounts);
+      }).catch((error)=>{
+         console.log("failed loading from firebase");
+      });;
+      this.dataRef().on('child_added', (data) => {
+        console.log("Received child_added From Firebase:", data);
+        this.setState(previousState => {
+          const amounts = { ...previousState.amounts, [data.key]: data.val() };
+          this.updateAsyncStorage(amounts)
+          return { amounts };
+        });
+      });
+    }
+  }
+
   fetchBucket () {
-    if (this.state.bucketIsValid && this.state.passwordIsValid) {
-      const bucket = this._bucket;
-      const password = this._password;
-      try {
-        this._dataRef = firebase.database().ref(this.dataRefKey(this._bucket, this._password));
-        this._dataRef.once('value').then((snapshot) => {
-          console.log("LOADED ONCE");
-          const dataForStore = {
-            amounts: snapshot.val() || [],
-            bucket,
-            password,
-          }
-          this.setState(dataForStore)
-          AsyncStorage.setItem(bucketStorageKey, JSON.stringify(dataForStore));
-        });
-        this._dataRef.on('child_added', (data) => {
-          console.log("Received child_added From Firebase:", data);
-          this.setState(previousState => {
-            const amounts = { ...previousState.amounts, [data.key]: data.val() };
-            const dataForStore = {
-              amounts,
-              bucket,
-              password
-            }
-            AsyncStorage.setItem(bucketStorageKey, JSON.stringify(dataForStore));
-            return { amounts };
-          });
-        });
-      } catch (error) {
-        console.log(error);
-        // Error saving data
-      }
+    if (this.validateField(this._bucket) && this.validateField(this._password)) {
+      this.setState({ bucket: this._bucket, password: this._password })
     } else {
-      Alert.alert('Please only use digits and english characters')
+      Alert.alert('Please use at least 4 characters on both bucket name and password')
     }
   }
 
   validateField (text) {
-    return !text || text.indexOf(':') === -1;
+    return text && text.length >= 4;
   }
 
-  onBucketChange (text) {
-    this._bucket = text;
-    if (this.validateField(text) !== this.state.bucketIsValid ) {
-      this.setState({ bucketIsValid: this.validateField(text) })
+  updateAsyncStorage (amounts, bucket = this.state.bucket, password = this.state.password) {
+    const dataForStore = {
+      amounts,
+      bucket,
+      password
     }
-  }
-
-  onPasswordChange (text) {
-    this._password = text;
-    if (this.validateField(text) !== this.state.passwordIsValid ) {
-      this.setState({ passwordIsValid: this.validateField(text) })
+    try {
+      AsyncStorage.setItem(bucketStorageKey, JSON.stringify(dataForStore));
+    } catch (error) {
+      console.log(error);
+      // Error saving data
     }
   }
 
@@ -169,19 +155,19 @@ export default class App extends React.Component {
           </Text>
         </View>
         <TextInput
-          style={[styles.credsInput, !this.state.bucketIsValid && styles.invalidInput ]}
+          style={[styles.credsInput]}
           autoCapitalize='none'
           autoCorrect={false}
           autoFocus
           returnKeyType='next'
-          onChangeText={this.onBucketChange}
+          onChangeText={(input) => this._bucket = input}
           placeholder='BUCKET NAME'
         />
         <TextInput
-          style={[styles.credsInput, !this.state.passwordIsValid && styles.invalidInput ]}
+          style={[styles.credsInput]}
           autoCorrect={false}
           secureTextEntry
-          onChangeText={this.onPasswordChange}
+          onChangeText={(input) => this._password = input}
           placeholder='PASSWORD'
         />
         <Button
