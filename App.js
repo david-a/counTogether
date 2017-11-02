@@ -212,6 +212,7 @@ export default class App extends React.Component {
                   onChangeText={(text) => this._input = parseInt(text)}
                   ref={(c) => this._inputElement = c}
                   placeholder='ADD HERE'
+                  placeholderTextColor='#d8d8ff'
                   onFocus={() => this._inputElement.setNativeProps({placeholder: ''})}
                   onBlur={() => this._inputElement.setNativeProps({placeholder: 'ADD MORE!'})}
                 />
@@ -293,7 +294,8 @@ const styles = StyleSheet.create({
     height: 70,
     fontSize: 50,
     borderWidth: 0,
-    textAlign: 'center'
+    textAlign: 'center',
+    color: '#841584'
   },
   logOutButton: {
     flex: 1,
