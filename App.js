@@ -31,7 +31,6 @@ export default class App extends React.Component {
 
   componentDidUpdate(prevProps, prevState) {
     if (!prevState.bucket && this.state.bucket) {
-      console.log('connecting to firebase', this.state.bucket);
       this.listenToFirebase();
     }
   }
@@ -42,7 +41,6 @@ export default class App extends React.Component {
       if (dataFromStorage){
         // We have data!!
         var { bucket, password, amounts = {}} = JSON.parse(dataFromStorage);
-        console.log("got From Storage", JSON.parse(dataFromStorage));
         this.setState({
           amounts: amounts,
           bucket,
@@ -53,14 +51,12 @@ export default class App extends React.Component {
         this.setState({ storageLoading: false });
       }
     } catch (error) {
-      console.log(error);
       // Error retrieving data
     }
   }
 
   async logOut () {
     await AsyncStorage.removeItem(bucketStorageKey);
-    console.log('removed from storage!')
     this._dataRef = null;
     this.setState({ ...this.initialState, storageLoading: false });
   }
@@ -74,6 +70,7 @@ export default class App extends React.Component {
   }
 
   calculateAmounts () {
+    if (!this.state.amounts) return 0;
     return Object.keys(this.state.amounts).reduce((previous, key) => previous + this.state.amounts[key], 0);
   }
 
@@ -83,9 +80,7 @@ export default class App extends React.Component {
       return;
     }
     const newValue = this._input;
-    console.log("NEW VALUE: " , newValue);
     const undoKey = this.dataRef().push(newValue).key
-    console.log("undo key:", undoKey);
     this.setState(previousState => {
       const amounts = { ...previousState.amounts, [undoKey]: newValue };
       this.updateAsyncStorage(amounts);
@@ -97,17 +92,13 @@ export default class App extends React.Component {
 
   listenToFirebase () {
     if (this.dataRef()) {
-      console.log("listenToFirebase:", this.state);
       this.dataRef().once('value').then((snapshot) => {
-        console.log("LOADED ONCE");
         const amounts = snapshot.val();
         this.setState({ amounts });
         this.updateAsyncStorage(amounts);
       }).catch((error)=>{
-         console.log("failed loading from firebase");
       });;
       this.dataRef().on('child_added', (data) => {
-        console.log("Received child_added From Firebase:", data);
         this.setState(previousState => {
           const amounts = { ...previousState.amounts, [data.key]: data.val() };
           this.updateAsyncStorage(amounts)
@@ -138,7 +129,6 @@ export default class App extends React.Component {
     try {
       AsyncStorage.setItem(bucketStorageKey, JSON.stringify(dataForStore));
     } catch (error) {
-      console.log(error);
       // Error saving data
     }
   }
@@ -156,6 +146,7 @@ export default class App extends React.Component {
         </View>
         <TextInput
           style={[styles.credsInput]}
+          placeholderTextColor='#ddddee'
           autoCapitalize='none'
           autoCorrect={false}
           autoFocus
@@ -165,6 +156,7 @@ export default class App extends React.Component {
         />
         <TextInput
           style={[styles.credsInput]}
+          placeholderTextColor='#ddddee'
           autoCorrect={false}
           secureTextEntry
           onChangeText={(input) => this._password = input}
@@ -181,7 +173,6 @@ export default class App extends React.Component {
   }
 
   render() {
-    console.log("State:", this.state);
     if (this.state.storageLoading) {
       return <ActivityIndicator />
     }
@@ -195,6 +186,7 @@ export default class App extends React.Component {
           contentContainerStyle={styles.container}
           >
             <View style={styles.bigNumberContainer}>
+              <Text style={styles.bucketName}>{this.state.bucket}</Text>
               <Text
                 adjustsFontSizeToFit
                 numberOfLines={1}
@@ -250,24 +242,27 @@ const styles = StyleSheet.create({
   },
   caption: {
     fontSize: 50,
-    textAlign: 'center'
+    textAlign: 'center',
+    color: '#841584'
   },
   subCaption: {
     fontSize: 20
   },
-  invalidInput: {
-    color: 'red'
-  },
   credsInput: {
     fontSize: 50,
     alignSelf: 'stretch',
-    textAlign: 'center'
+    textAlign: 'center',
+    color: '#841584'
   },
   bigNumberContainer: {
     width: '100%',
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  bucketName: {
+    fontSize: 18,
+    color: '#ddddee'
   },
   bigNumber: {
     textAlign: 'center',
