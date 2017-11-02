@@ -1,5 +1,6 @@
 import React from 'react';
 import { Animated, ActivityIndicator, StyleSheet, Text, View, Button, TextInput, ScrollView, Alert, AsyncStorage } from 'react-native';
+import ScalableText from './ScalableText';
 import firebase from 'firebase'
 import firebaseConfig from './config/firebase'
 import bucketStorageKey from './config/asyncStorage'
@@ -91,6 +92,7 @@ export default class App extends React.Component {
       return;
     }
     const newValue = value || this._input;
+    if (!newValue) return;
     const undoKey = this.dataRef().push(newValue).key
     this.setState(previousState => {
       const amounts = { ...previousState.amounts, [undoKey]: newValue };
@@ -191,18 +193,18 @@ export default class App extends React.Component {
 
   highlightLastChild(newValue) {
     this.setState({ lastValue: newValue });
-    Animated.timing(                  // Animate over time
-     this.state.externalChildfadeAnim,            // The animated value to drive
+    Animated.timing(
+     this.state.externalChildfadeAnim,
      {
-       toValue: 1,                   // Animate to opacity: 1 (opaque)
-       duration: 300,              // Make it take a while
+       toValue: 1,
+       duration: 300,
      }
    ).start(() => {
-     Animated.timing(                  // Animate over time
-      this.state.externalChildfadeAnim,            // The animated value to drive
+     Animated.timing(
+      this.state.externalChildfadeAnim,
       {
-        toValue: 0,                   // Animate to opacity: 1 (opaque)
-        duration: 3000,              // Make it take a while
+        toValue: 0,
+        duration: 3000,
       }
     ).start();
    });
@@ -210,15 +212,15 @@ export default class App extends React.Component {
 
   renderNumberOrLoading () {
     if (this.state.fetchingFromFirebase) {
-      return <ActivityIndicator style={styles.bigNumberContent} size='large' />
+      return <ActivityIndicator style={{ height: 90 }} size='large' />
     } else {
-      return <Text
-                adjustsFontSizeToFit
-                numberOfLines={1}
-                style={[styles.bigNumber, styles.bigNumberContent]}
+      return <ScalableText
+                height={90}
+                width={'90%'}
+                style={styles.bigNumber}
               >
                 {this.calculateAmounts()}
-              </Text>
+              </ScalableText>
     }
   }
 
@@ -228,6 +230,11 @@ export default class App extends React.Component {
 
   lastChildColor () {
     return (this.state.lastValue > 0 ? '#ffff8c' : '#f44242' )
+  }
+
+  lastValueFormattedText () {
+    const plus = this.state.lastValue > 0 ? '+' : ''
+    return plus + this.state.lastValue
   }
 
   render() {
@@ -247,7 +254,7 @@ export default class App extends React.Component {
               <Text style={styles.bucketName}>{this.state.bucket}</Text>
               {this.renderNumberOrLoading()}
               <Animated.View style={[styles.addedChild, { backgroundColor: this.lastChildColor(), opacity: this.state.externalChildfadeAnim }]}>
-                <Text>{this.state.lastValue}</Text>
+                <Text>{this.lastValueFormattedText()}</Text>
               </Animated.View>
             </View>
             <View style={styles.buttonsContainer}>
@@ -339,10 +346,6 @@ const styles = StyleSheet.create({
     marginTop: 20,
     borderRadius: 10,
     padding: 10
-  },
-  bigNumberContent: {
-    height: 150,
-    width: '100%'
   },
   buttonsContainer: {
     flex: 1,
