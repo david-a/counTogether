@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, StyleSheet, Text, View, Button, TextInput, ScrollView, Alert, AsyncStorage } from 'react-native';
+import { Animated, ActivityIndicator, StyleSheet, Text, View, Button, TextInput, ScrollView, Alert, AsyncStorage } from 'react-native';
 import firebase from 'firebase'
 import firebaseConfig from './config/firebase'
 import bucketStorageKey from './config/asyncStorage'
@@ -11,9 +11,11 @@ export default class App extends React.Component {
       amounts: {},
       bucket: null,
       password: null,
-      storageLoading: true
+      storageLoading: true,
+      externalChildfadeAnim: new Animated.Value(0)
     };
-    this._input = 0;
+    this.setInitialValues = this.setInitialValues.bind(this);
+    this.setInitialValues();
     this.state = this.initialState;
     this.addSome = this.addSome.bind(this);
     this.logOut = this.logOut.bind(this);
@@ -22,6 +24,12 @@ export default class App extends React.Component {
     this.updateAsyncStorage = this.updateAsyncStorage.bind(this);
     this.dataRef = this.dataRef.bind(this);
     this.listenToFirebase = this.listenToFirebase.bind(this);
+    this.highlightExternalChild = this.highlightExternalChild.bind(this);
+  }
+
+  setInitialValues () {
+    this._input = 0;
+    this._dataRef = null;
   }
 
   componentWillMount () {
@@ -58,8 +66,8 @@ export default class App extends React.Component {
 
   async logOut () {
     await AsyncStorage.removeItem(bucketStorageKey);
-    this._dataRef = null;
-    this.setState({ ...this.initialState, storageLoading: false });
+    this.setInitialValues();
+    this.setState({ ...this.initialState, storageLoading: false, initialDataLoaded: false });
   }
 
   dataRef () {
@@ -93,19 +101,16 @@ export default class App extends React.Component {
 
   listenToFirebase () {
     if (this.dataRef()) {
-      this.dataRef().once('value').then((snapshot) => {
-        const amounts = snapshot.val();
-        this.setState({ amounts, fetchingFromFirebase: false });
-        this.updateAsyncStorage(amounts);
-      }).catch((error)=>{
-        console.log('Error fetching data from firebase');
-      });;
       this.dataRef().on('child_added', (data) => {
         this.setState(previousState => {
           const amounts = { ...previousState.amounts, [data.key]: data.val() };
           this.updateAsyncStorage(amounts)
-          return { amounts };
+          return { amounts, fetchingFromFirebase: false };
         });
+        if (this.state.initialDataLoaded) this.highlightExternalChild(data.val());
+      });
+      this.dataRef().once('value', (snapshot) => {
+        this.setState({ initialDataLoaded: true });
       });
     }
   }
@@ -174,6 +179,25 @@ export default class App extends React.Component {
     )
   }
 
+  highlightExternalChild(newValue) {
+    this.setState({ externalValue: newValue });
+    Animated.timing(                  // Animate over time
+     this.state.externalChildfadeAnim,            // The animated value to drive
+     {
+       toValue: 1,                   // Animate to opacity: 1 (opaque)
+       duration: 300,              // Make it take a while
+     }
+   ).start(() => {
+     Animated.timing(                  // Animate over time
+      this.state.externalChildfadeAnim,            // The animated value to drive
+      {
+        toValue: 0,                   // Animate to opacity: 1 (opaque)
+        duration: 3000,              // Make it take a while
+      }
+    ).start();
+   });
+  }
+
   renderNumberOrLoading () {
     if (this.state.fetchingFromFirebase) {
       return <ActivityIndicator style={styles.bigNumberContent} size='large' />
@@ -204,34 +228,37 @@ export default class App extends React.Component {
             <View style={styles.bigNumberContainer}>
               <Text style={styles.bucketName}>{this.state.bucket}</Text>
               {this.renderNumberOrLoading()}
-              </View>
-              <View style={styles.buttonsContainer}>
-                <TextInput
-                  style={styles.addValueTextInput}
-                  keyboardType='numeric'
-                  onChangeText={(text) => this._input = parseInt(text)}
-                  ref={(c) => this._inputElement = c}
-                  placeholder='ADD HERE'
-                  placeholderTextColor='#d8d8ff'
-                  onFocus={() => this._inputElement.setNativeProps({placeholder: ''})}
-                  onBlur={() => this._inputElement.setNativeProps({placeholder: 'ADD MORE!'})}
-                />
+              <Animated.View style={[styles.addedChild, { opacity: this.state.externalChildfadeAnim }]}>
+                <Text>{this.state.externalValue}</Text>
+              </Animated.View>
+            </View>
+            <View style={styles.buttonsContainer}>
+              <TextInput
+                style={styles.addValueTextInput}
+                keyboardType='numeric'
+                onChangeText={(text) => this._input = parseInt(text)}
+                ref={(c) => this._inputElement = c}
+                placeholder='ADD HERE'
+                placeholderTextColor='#d8d8ff'
+                onFocus={() => this._inputElement.setNativeProps({placeholder: ''})}
+                onBlur={() => this._inputElement.setNativeProps({placeholder: 'ADD MORE!'})}
+              />
+              <Button
+                onPress={this.addSome}
+                title="Ok"
+                color="#841584"
+                accessibilityLabel="Add 5 more"
+              />
+              <View style={styles.logOutButton}>
                 <Button
-                  onPress={this.addSome}
-                  title="Ok"
+                  onPress={this.logOut}
+                  title="Log Out"
                   color="#841584"
                   accessibilityLabel="Add 5 more"
                 />
-                <View style={styles.logOutButton}>
-                  <Button
-                    onPress={this.logOut}
-                    title="Log Out"
-                    color="#841584"
-                    accessibilityLabel="Add 5 more"
-                  />
-                </View>
               </View>
-            </ScrollView>
+            </View>
+        </ScrollView>
           );
         }
     }
@@ -281,6 +308,12 @@ const styles = StyleSheet.create({
   bigNumber: {
     textAlign: 'center',
     fontSize: 150
+  },
+  addedChild: {
+    marginTop: 20,
+    borderRadius: 10,
+    backgroundColor: '#ffff8c',
+    padding: 10
   },
   bigNumberContent: {
     height: 150,
