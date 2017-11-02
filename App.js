@@ -19,12 +19,14 @@ export default class App extends React.Component {
     this.state = this.initialState;
     this.addSome = this.addSome.bind(this);
     this.logOut = this.logOut.bind(this);
+    this.undo = this.undo.bind(this);
     this.fetchBucket = this.fetchBucket.bind(this);
     this.calculateAmounts = this.calculateAmounts.bind(this);
     this.updateAsyncStorage = this.updateAsyncStorage.bind(this);
     this.dataRef = this.dataRef.bind(this);
     this.listenToFirebase = this.listenToFirebase.bind(this);
-    this.highlightExternalChild = this.highlightExternalChild.bind(this);
+    this.highlightLastChild = this.highlightLastChild.bind(this);
+    this.lastChildColor = this.lastChildColor.bind(this);
   }
 
   setInitialValues () {
@@ -67,7 +69,7 @@ export default class App extends React.Component {
   async logOut () {
     await AsyncStorage.removeItem(bucketStorageKey);
     this.setInitialValues();
-    this.setState({ ...this.initialState, storageLoading: false, initialDataLoaded: false });
+    this.setState({ ...this.initialState, storageLoading: false, initialDataLoaded: false, lastValue: 0 });
   }
 
   dataRef () {
@@ -83,12 +85,12 @@ export default class App extends React.Component {
     return Object.keys(this.state.amounts).reduce((previous, key) => previous + this.state.amounts[key], 0);
   }
 
-  addSome () {
+  addSome (_proxy, value = null) {
     if (!this.dataRef()) {
       Alert.alert('Initiating bucket, please try again.')
       return;
     }
-    const newValue = this._input;
+    const newValue = value || this._input;
     const undoKey = this.dataRef().push(newValue).key
     this.setState(previousState => {
       const amounts = { ...previousState.amounts, [undoKey]: newValue };
@@ -105,12 +107,12 @@ export default class App extends React.Component {
         this.setState(previousState => {
           const amounts = { ...previousState.amounts, [data.key]: data.val() };
           this.updateAsyncStorage(amounts)
-          return { amounts, fetchingFromFirebase: false };
+          return { amounts };
         });
-        if (this.state.initialDataLoaded) this.highlightExternalChild(data.val());
+        if (this.state.initialDataLoaded) this.highlightLastChild(data.val());
       });
       this.dataRef().once('value', (snapshot) => {
-        this.setState({ initialDataLoaded: true });
+        this.setState({ initialDataLoaded: true, fetchingFromFirebase: false });
       });
     }
   }
@@ -179,8 +181,8 @@ export default class App extends React.Component {
     )
   }
 
-  highlightExternalChild(newValue) {
-    this.setState({ externalValue: newValue });
+  highlightLastChild(newValue) {
+    this.setState({ lastValue: newValue });
     Animated.timing(                  // Animate over time
      this.state.externalChildfadeAnim,            // The animated value to drive
      {
@@ -212,6 +214,14 @@ export default class App extends React.Component {
     }
   }
 
+  undo () {
+    this.addSome(null, -this.state.lastValue);
+  }
+
+  lastChildColor () {
+    return (this.state.lastValue > 0 ? '#ffff8c' : '#f44242' )
+  }
+
   render() {
     if (this.state.storageLoading) {
       return <ActivityIndicator />
@@ -228,8 +238,8 @@ export default class App extends React.Component {
             <View style={styles.bigNumberContainer}>
               <Text style={styles.bucketName}>{this.state.bucket}</Text>
               {this.renderNumberOrLoading()}
-              <Animated.View style={[styles.addedChild, { opacity: this.state.externalChildfadeAnim }]}>
-                <Text>{this.state.externalValue}</Text>
+              <Animated.View style={[styles.addedChild, { backgroundColor: this.lastChildColor(), opacity: this.state.externalChildfadeAnim }]}>
+                <Text>{this.state.lastValue}</Text>
               </Animated.View>
             </View>
             <View style={styles.buttonsContainer}>
@@ -249,12 +259,19 @@ export default class App extends React.Component {
                 color="#841584"
                 accessibilityLabel="Add 5 more"
               />
-              <View style={styles.logOutButton}>
+              <View style={styles.logOutButtonContainer}>
+                <Button
+                  disabled={!this.state.lastValue}
+                  onPress={this.undo}
+                  title="Undo"
+                  color="#841584"
+                  accessibilityLabel="Undo last action"
+                />
                 <Button
                   onPress={this.logOut}
                   title="Log Out"
                   color="#841584"
-                  accessibilityLabel="Add 5 more"
+                  accessibilityLabel="Log OUt"
                 />
               </View>
             </View>
@@ -312,7 +329,6 @@ const styles = StyleSheet.create({
   addedChild: {
     marginTop: 20,
     borderRadius: 10,
-    backgroundColor: '#ffff8c',
     padding: 10
   },
   bigNumberContent: {
@@ -330,9 +346,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#841584'
   },
-  logOutButton: {
+  logOutButtonContainer: {
     flex: 1,
-    justifyContent: 'flex-end',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
     padding: 30
   }
 });
