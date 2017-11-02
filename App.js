@@ -45,13 +45,14 @@ export default class App extends React.Component {
           amounts: amounts,
           bucket,
           password,
-          storageLoading: false
+          storageLoading: false,
+          fetchingFromFirebase: true
         });
       } else {
         this.setState({ storageLoading: false });
       }
     } catch (error) {
-      // Error retrieving data
+      console.log('Error fetching data from AsyncStorage');
     }
   }
 
@@ -94,9 +95,10 @@ export default class App extends React.Component {
     if (this.dataRef()) {
       this.dataRef().once('value').then((snapshot) => {
         const amounts = snapshot.val();
-        this.setState({ amounts });
+        this.setState({ amounts, fetchingFromFirebase: false });
         this.updateAsyncStorage(amounts);
       }).catch((error)=>{
+        console.log('Error fetching data from firebase');
       });;
       this.dataRef().on('child_added', (data) => {
         this.setState(previousState => {
@@ -110,7 +112,7 @@ export default class App extends React.Component {
 
   fetchBucket () {
     if (this.validateField(this._bucket) && this.validateField(this._password)) {
-      this.setState({ bucket: this._bucket, password: this._password })
+      this.setState({ bucket: this._bucket, password: this._password, fetchingFromFirebase: true })
     } else {
       Alert.alert('Please use at least 4 characters on both bucket name and password')
     }
@@ -129,7 +131,7 @@ export default class App extends React.Component {
     try {
       AsyncStorage.setItem(bucketStorageKey, JSON.stringify(dataForStore));
     } catch (error) {
-      // Error saving data
+      console.log('Error Saving Data to AsyncStorage');
     }
   }
 
@@ -172,6 +174,20 @@ export default class App extends React.Component {
     )
   }
 
+  renderNumberOrLoading () {
+    if (this.state.fetchingFromFirebase) {
+      return <ActivityIndicator style={styles.bigNumberContent} size='large' />
+    } else {
+      return <Text
+                adjustsFontSizeToFit
+                numberOfLines={1}
+                style={[styles.bigNumber, styles.bigNumberContent]}
+              >
+                {this.calculateAmounts()}
+              </Text>
+    }
+  }
+
   render() {
     if (this.state.storageLoading) {
       return <ActivityIndicator />
@@ -187,10 +203,7 @@ export default class App extends React.Component {
           >
             <View style={styles.bigNumberContainer}>
               <Text style={styles.bucketName}>{this.state.bucket}</Text>
-              <Text
-                adjustsFontSizeToFit
-                numberOfLines={1}
-                style={styles.bigNumber}>{this.calculateAmounts()}</Text>
+              {this.renderNumberOrLoading()}
               </View>
               <View style={styles.buttonsContainer}>
                 <TextInput
@@ -266,7 +279,9 @@ const styles = StyleSheet.create({
   },
   bigNumber: {
     textAlign: 'center',
-    fontSize: 150,
+    fontSize: 150
+  },
+  bigNumberContent: {
     height: 150,
     width: '90%'
   },
