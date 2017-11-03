@@ -36,7 +36,9 @@ export default class App extends React.Component {
   }
 
   componentWillMount () {
-    firebase.initializeApp(firebaseConfig);
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
     this.getBucketDetailsFromStorage();
   }
 
