@@ -4,4 +4,5 @@ npm-debug.*
 **/.DS_STore
 **/*.keystore
 android/app/build/
-.gradle/
+android/.gradle/
+android/build/
